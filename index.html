@@ -1,0 +1,116 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Calendario de turnos</title>
+<style>
+:root{--bg:#f3f4f6;--fg:#1c1f26;--cd:#fff;--ln:#d3d8e0;--ac:#2e4a7d;--mu:#667085;--bad:#b3261e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#15181d;--fg:#eceef2;--cd:#1f242b;--ln:#363d47;--ac:#7fa3e6;--mu:#9aa3b0;--bad:#ff8a80}}
+:root[data-theme=dark]{--bg:#15181d;--fg:#eceef2;--cd:#1f242b;--ln:#363d47;--ac:#7fa3e6;--mu:#9aa3b0;--bad:#ff8a80}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,sans-serif}
+main{max-width:640px;margin:0 auto;padding:16px}
+h1{font-size:1.35rem;margin:0 0 12px}
+details{background:var(--cd);border:1px solid var(--ln);border-radius:12px;padding:12px 14px;margin:0 0 12px}
+summary{font-weight:700;cursor:pointer}
+label{display:block;font-weight:600;margin:10px 0 3px;font-size:.92rem}
+input,select,textarea{width:100%;padding:9px 10px;border:1px solid var(--ln);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
+textarea{min-height:70px}
+.f{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px}
+.f label{display:flex;gap:5px;align-items:center;font-weight:400;margin:0}
+.f input{width:auto}
+button{padding:10px 14px;border:0;border-radius:10px;background:var(--ac);color:#fff;font:600 .92rem inherit;font-family:inherit;margin:10px 8px 0 0;cursor:pointer}
+button.s{background:transparent;color:var(--mu);border:1px solid var(--ln)}
+.cd{border:1px solid var(--ln);border-radius:10px;padding:10px;margin-top:10px}
+.cd small{color:var(--mu)}
+.chip{padding:5px 9px;margin:4px 4px 0 0;background:transparent;color:var(--fg);border:1px solid var(--ln);font-weight:400;font-size:.82rem}
+.chip.on{background:var(--bad);color:#fff;border-color:var(--bad)}
+.bad{color:var(--bad);font-size:.85rem;margin-top:4px}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px}
+canvas,#out img{width:100%;height:auto;border:1px solid var(--ln);border-radius:8px;margin-top:10px}
+</style></head><body><main>
+<h1>🎶 Calendario de turnos</h1>
+<details open><summary>1 · Mes, diseño y datos</summary>
+<div class="g"><div><label>Mes</label><select id="m" data-k="my"></select></div><div><label>Año</label><input id="y" type="number" data-k="my"></div></div>
+<label>Voces por día (días normales)</label><input id="nv" type="number" min="0" max="8" data-k="nv">
+<label>Diseño del calendario</label><select id="est" data-k="est"></select>
+<label>Calendario hecho por</label><input id="autor" data-k="autor" placeholder="Nombre">
+<label>Nota al final</label><textarea id="nota" data-k="nota" placeholder="Ej.: Ensayo el sábado a las 6 p. m."></textarea>
+</details>
+<details open><summary>2 · Personas y disponibilidad</summary><div id="pers"></div><button data-a="addp">+ Agregar persona</button></details>
+<details><summary>3 · Días especiales</summary>
+<label>Fecha</label><input id="ef" type="date"><label>Nombre (opcional)</label><input id="en" placeholder="Aniversario">
+<div class="f"><label><input type="checkbox" class="ep" value="p" checked>Piano</label><label><input type="checkbox" class="ep" value="b" checked>Batería</label><label><input type="checkbox" class="ep" value="v" checked>Voces</label></div>
+<label>Cantidad de voces</label><input id="env" type="number" min="0" max="8" value="2">
+<button data-a="adde">Agregar día especial</button><div id="espl"></div></details>
+<details open><summary>4 · Asignar turnos</summary>
+<button data-a="auto">✨ Armar automático</button><button data-a="clear" class="s">Limpiar mes</button><p id="msg"></p><div id="asg"></div></details>
+<details open><summary>5 · Calendario</summary><canvas id="cv"></canvas><button data-a="img">Crear imagen para guardar</button><div id="out"></div></details>
+<button data-a="reset" class="s">🗑 Borrar todo y empezar de cero</button>
+</main><script>
+const $=s=>document.querySelector(s),D=['D','L','M','X','J','V','S'],MES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'],PU={p:'Piano',b:'Batería',v:'Voz'},p2=n=>('0'+n).slice(-2),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const TH=[
+{n:'Clásico azul',bg:'#fff',t:'#2e4a7d',hb:'#2e4a7d',ht:'#fff',a:'#fff',b:'#f1f5fb',d:'#dfe7f5',tx:'#1b2440',ln:'#b9c3da',sp:'#fff3cd',f:'Arial'},
+{n:'Bosque',bg:'#f6faf6',t:'#1f5f3b',hb:'#1f5f3b',ht:'#fff',a:'#fff',b:'#eaf4ec',d:'#d3e8d8',tx:'#16301f',ln:'#a9cdb3',sp:'#fff3c4',f:'Arial'},
+{n:'Noche',bg:'#161a22',t:'#e8c872',hb:'#e8c872',ht:'#161a22',a:'#1f2530',b:'#252c3a',d:'#2e3748',tx:'#e9ecf2',ln:'#3c465a',sp:'#4a3f1a',f:'Arial'},
+{n:'Terracota',bg:'#fbf3ec',t:'#a4492a',hb:'#a4492a',ht:'#fff',a:'#fff',b:'#f8e6da',d:'#f0d2bf',tx:'#3b2218',ln:'#dcb8a2',sp:'#fff0b8',f:'Georgia'},
+{n:'Minimal',bg:'#fff',t:'#111',hb:'#fff',ht:'#111',a:'#fff',b:'#fff',d:'#fff',tx:'#111',ln:'#111',sp:'#eee',f:'Helvetica, Arial',min:1},
+{n:'Uva',bg:'#f7f3fb',t:'#5b2f91',hb:'#5b2f91',ht:'#fff',a:'#fff',b:'#efe6f8',d:'#e0d0f1',tx:'#2a1740',ln:'#c9b3e3',sp:'#fff1b8',f:'Verdana'},
+{n:'Rosa',bg:'#fff7fa',t:'#c2185b',hb:'#e0568c',ht:'#fff',a:'#fff',b:'#fde8f0',d:'#f9d0e0',tx:'#4a1530',ln:'#f1b9cf',sp:'#fff0b0',f:'Georgia'}];
+let S;try{S=JSON.parse(localStorage.getItem('calMus1'))}catch(e){}
+S=S||{mes:new Date().toISOString().slice(0,7),nv:2,per:[],esp:[],asig:{},nota:'',autor:'',est:0};
+const save=()=>{try{localStorage.setItem('calMus1',JSON.stringify(S))}catch(e){}};
+const avail=(p,f)=>!p.w.includes(new Date(f+'T12:00:00').getDay())&&!p.x.includes(f);
+function fechas(){const[y,m]=S.mes.split('-').map(Number),n=new Date(y,m,0).getDate(),o=[];for(let d=1;d<=n;d++){const f=y+'-'+p2(m)+'-'+p2(d),w=new Date(y,m-1,d).getDay(),e=S.esp.find(x=>x.f==f);if(e||[0,2,5].includes(w))o.push({f,w,d,e})}return o}
+const slots=x=>{const pu=x.e?x.e.pu:['p','b','v'],nv=x.e?x.e.nv:S.nv,o=[];if(pu.includes('p'))o.push('p');if(pu.includes('b'))o.push('b');if(pu.includes('v'))for(let i=0;i<nv;i++)o.push('v'+i);return o};
+const sl=k=>k[0]=='v'?'Voz '+(+k.slice(1)+1):PU[k],lab=x=>D[x.w]+' '+x.d;
+function warns(x){const a=S.asig[x.f]||{},o=[],c={};slots(x).forEach(k=>{const n=a[k];if(!n)return;c[n]=(c[n]||0)+1;const p=S.per.find(q=>q.n==n);if(p&&!avail(p,x.f))o.push(n+' marcó que no puede este día');if(p&&!p.r.includes(k[0]))o.push(n+' no tiene marcado '+PU[k[0]])});Object.keys(c).forEach(n=>c[n]>1&&o.push(n+' está repetido este día'));return o}
+function ren(a,b){Object.values(S.asig).forEach(o=>Object.keys(o).forEach(k=>{if(o[k]==a){if(b)o[k]=b;else delete o[k]}}))}
+function auto(){const F=fechas(),t={},r={};let miss=0;const add=(n,k)=>{t[n]=(t[n]||0)+1;r[n+k[0]]=(r[n+k[0]]||0)+1};
+F.forEach(x=>slots(x).forEach(k=>{const n=(S.asig[x.f]||{})[k];n&&add(n,k)}));
+F.forEach(x=>{const a=S.asig[x.f]=S.asig[x.f]||{};slots(x).forEach(k=>{if(a[k])return;const u=Object.values(a),c=S.per.filter(p=>p.n&&p.r.includes(k[0])&&avail(p,x.f)&&!u.includes(p.n));c.sort((p,q)=>(t[p.n]||0)-(t[q.n]||0)||(r[p.n+k[0]]||0)-(r[q.n+k[0]]||0)||Math.random()-.5);if(c[0]){a[k]=c[0].n;add(c[0].n,k)}else miss++})});
+save();render();$('#msg').textContent=miss?'Quedaron '+miss+' puestos sin cubrir: nadie disponible con ese puesto.':'Listo: todos los puestos quedaron cubiertos.'}
+function render(){const F=fechas(),[y,m]=S.mes.split('-');
+$('#m').value=+m;$('#y').value=y;$('#nv').value=S.nv;$('#est').value=S.est;$('#autor').value=S.autor;$('#nota').value=S.nota;
+$('#pers').innerHTML=S.per.map((p,i)=>`<div class="cd"><input data-k="n" data-i="${i}" value="${esc(p.n)}" placeholder="Nombre">
+<div class="f">${Object.keys(PU).map(k=>`<label><input type="checkbox" data-k="r" data-i="${i}" data-v="${k}" ${p.r.includes(k)?'checked':''}>${PU[k]}</label>`).join('')}</div>
+<small>No puede nunca:</small><div class="f">${[[0,'Dom'],[2,'Mar'],[5,'Vie']].map(([w,t])=>`<label><input type="checkbox" data-k="w" data-i="${i}" data-v="${w}" ${p.w.includes(w)?'checked':''}>${t}</label>`).join('')}</div>
+<small>Fechas de este mes en que no puede (toca para marcar):</small><div>${F.map(x=>`<button class="chip ${p.x.includes(x.f)?'on':''}" data-a="chip" data-i="${i}" data-v="${x.f}">${lab(x)}</button>`).join('')}</div>
+<button class="s" data-a="delp" data-i="${i}">Quitar</button></div>`).join('');
+$('#espl').innerHTML=S.esp.map((e,i)=>`<div class="cd">${e.f} · ${esc(e.nombre||'Especial')} <small>(${e.pu.map(k=>PU[k]).join(', ')}${e.pu.includes('v')?' × '+e.nv:''})</small><button class="s" data-a="dele" data-i="${i}">✕</button></div>`).join('');
+let tw=0;$('#asg').innerHTML=F.map(x=>{const a=S.asig[x.f]||{},w=warns(x);tw+=w.length;return`<div class="cd"><b>${lab(x)}</b>${x.e&&x.e.nombre?' · '+esc(x.e.nombre):''}<div class="g">${slots(x).map(k=>`<div><label>${sl(k)}</label><select data-k="asig" data-f="${x.f}" data-s="${k}"><option value="">—</option>${S.per.filter(p=>p.n).map(p=>`<option value="${esc(p.n)}" ${a[k]==p.n?'selected':''}>${esc(p.n)}${avail(p,x.f)?'':' ⚠'}</option>`).join('')}</select></div>`).join('')}</div>${w.map(t=>`<div class="bad">⚠ ${esc(t)}</div>`).join('')}</div>`}).join('');
+if(!$('#msg').textContent.startsWith('Quedaron')&&!$('#msg').textContent.startsWith('Listo'))$('#msg').textContent='';
+if(tw)$('#msg').textContent='⚠ Hay '+tw+' advertencia(s) en las asignaciones (en rojo).';draw()}
+const wrapT=(x,t,w)=>{const o=[];t.split('\n').forEach(par=>{let l='';par.split(' ').forEach(wd=>{const s=l?l+' '+wd:wd;if(x.measureText(s).width>w&&l){o.push(l);l=wd}else l=s});o.push(l)});return o};
+const J=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' y '+a[a.length-1];
+function draw(){const T=TH[S.est],F=fechas(),c=$('#cv'),x=c.getContext('2d'),W=1100,RH=64,top=150,HH=70,m=+S.mes.split('-')[1],cw=[150,260,260,370];
+c.width=W;x.font='24px '+T.f;const nl=S.nota.trim()?wrapT(x,S.nota.trim(),W-120):[];
+c.height=top+HH+F.length*RH+50+(nl.length?nl.length*34+20:0)+(S.autor.trim()?50:0)+20;
+x.fillStyle=T.bg;x.fillRect(0,0,W,c.height);x.textAlign='center';x.textBaseline='middle';x.fillStyle=T.t;x.font='bold 52px '+T.f;x.fillText('Calendario del mes de '+MES[m-1],W/2,70);x.fillRect(60,112,W-120,5);
+const col=i=>60+cw.slice(0,i).reduce((a,b)=>a+b,0);
+x.fillStyle=T.hb;x.fillRect(60,top,W-120,HH);x.fillStyle=T.ht;x.font='bold 30px '+T.f;['Día','Piano','Batería','Voces'].forEach((t,i)=>x.fillText(t,col(i)+cw[i]/2,top+HH/2));
+F.forEach((r,i)=>{const y=top+HH+i*RH,a=S.asig[r.f]||{},ks=slots(r);x.fillStyle=r.e?T.sp:i%2?T.b:T.a;x.fillRect(60,y,W-120,RH);if(!r.e){x.fillStyle=T.d;x.fillRect(60,y,cw[0],RH)}
+x.fillStyle=T.tx;x.font='bold 28px '+T.f;const nm=r.e&&r.e.nombre;x.fillText(lab(r),col(0)+cw[0]/2,y+(nm?24:RH/2),cw[0]-10);if(nm){x.font='bold 16px '+T.f;x.fillText(nm,col(0)+cw[0]/2,y+49,cw[0]-10)}
+x.font='28px '+T.f;[['p'],['b'],['v']].forEach(([k],j)=>{const names=ks.filter(s=>s[0]==k).map(s=>a[s]).filter(Boolean);x.fillText(ks.some(s=>s[0]==k)?J(names):'—',col(j+1)+cw[j+1]/2,y+RH/2,cw[j+1]-20)})});
+x.strokeStyle=T.ln;x.lineWidth=2;const bot=top+HH+F.length*RH;F.forEach((r,i)=>{x.beginPath();x.moveTo(60,top+HH+i*RH);x.lineTo(W-60,top+HH+i*RH);x.stroke()});x.strokeRect(60,top,W-120,bot-top);
+if(!T.min)for(let i=1;i<4;i++){x.beginPath();x.moveTo(col(i),top);x.lineTo(col(i),bot);x.stroke()}
+x.textAlign='left';x.fillStyle=T.tx;x.font='24px '+T.f;let y=bot+40;nl.forEach(l=>{x.fillText(l,60,y);y+=34});
+if(S.autor.trim()){x.textAlign='right';x.font='italic 22px '+T.f;x.fillText('Elaborado por: '+S.autor.trim(),W-60,y+(nl.length?14:0))}}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b)return;const a=b.dataset.a,i=+b.dataset.i;
+if(a=='addp')S.per.push({n:'',r:[],w:[],x:[]});
+else if(a=='delp'){if(!confirm('¿Quitar a '+(S.per[i].n||'esta persona')+'?'))return;ren(S.per[i].n,'');S.per.splice(i,1)}
+else if(a=='chip'){const p=S.per[i],v=b.dataset.v,j=p.x.indexOf(v);j<0?p.x.push(v):p.x.splice(j,1)}
+else if(a=='adde'){if(!$('#ef').value)return alert('Elige la fecha del día especial.');const f=$('#ef').value;S.esp=S.esp.filter(x=>x.f!=f);S.esp.push({f,nombre:$('#en').value.trim(),pu:[...document.querySelectorAll('.ep:checked')].map(x=>x.value),nv:+$('#env').value||0});S.esp.sort((a,b)=>a.f<b.f?-1:1);$('#en').value=''}
+else if(a=='dele')S.esp.splice(i,1);
+else if(a=='auto')return auto();
+else if(a=='clear'){if(!confirm('¿Borrar todas las asignaciones de este mes?'))return;fechas().forEach(x=>delete S.asig[x.f]);$('#msg').textContent=''}
+else if(a=='reset'){if(!confirm('¿Borrar TODO (personas, días especiales, turnos, nota y nombre) y empezar de cero? No se puede deshacer.'))return;S={mes:new Date().toISOString().slice(0,7),nv:2,per:[],esp:[],asig:{},nota:'',autor:'',est:0};try{localStorage.removeItem('calMus1')}catch(e){}$('#msg').textContent='';$('#out').innerHTML=''}
+else if(a=='img'){$('#out').innerHTML='<p>Mantén presionada la imagen y elige Guardar o Compartir.</p><img alt="Calendario" src="'+$('#cv').toDataURL('image/png')+'">';return}
+save();render()});
+document.addEventListener('input',e=>{const k=e.target.dataset.k;if(k=='autor'||k=='nota'){S[k]=e.target.value;save();draw()}});
+document.addEventListener('change',e=>{const t=e.target,k=t.dataset.k,i=+t.dataset.i;if(!k||k=='autor'||k=='nota')return;
+if(k=='my')S.mes=($('#y').value||new Date().getFullYear())+'-'+p2($('#m').value);
+else if(k=='nv')S.nv=Math.max(0,Math.min(8,+t.value||0));
+else if(k=='est')S.est=+t.value;
+else if(k=='n'){const o=S.per[i].n;S.per[i].n=t.value.trim();ren(o,S.per[i].n)}
+else if(k=='r'||k=='w'){const p=S.per[i],v=k=='w'?+t.dataset.v:t.dataset.v,j=p[k].indexOf(v);j<0?p[k].push(v):p[k].splice(j,1)}
+else if(k=='asig'){(S.asig[t.dataset.f]=S.asig[t.dataset.f]||{})[t.dataset.s]=t.value}
+save();render()});
+$('#m').innerHTML=MES.map((n,i)=>`<option value="${i+1}">${n}</option>`).join('');$('#est').innerHTML=TH.map((t,i)=>`<option value="${i}">${i+1}. ${t.n}</option>`).join('');
+render();
+</script></body></html>
